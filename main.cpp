@@ -33,11 +33,7 @@ SOFTWARE.
 #include <stdio.h>
 #include <string>
 #include <vector>
-#include <iostream>
-#include <filesystem>
 #include <windows.h>
-#include <wincodec.h>
-#include <regex>
 #include "iracing.h"
 #include "Config.h"
 #include "OverlayCover.h"
@@ -46,9 +42,6 @@ SOFTWARE.
 #include "OverlayStandings.h"
 #include "OverlayDebug.h"
 #include "OverlayDDU.h"
-
-using namespace Microsoft::WRL;
-using namespace std;
 
 enum class Hotkey
 {
@@ -90,7 +83,7 @@ static void registerHotkeys()
         RegisterHotKey( NULL, (int)Hotkey::Cover, mod, vk );
 }
 
-static void handleConfigChange( vector<Overlay*> overlays, ConnectionStatus status )
+static void handleConfigChange( std::vector<Overlay*> overlays, ConnectionStatus status )
 {
     registerHotkeys();
 
@@ -114,60 +107,6 @@ static void giveFocusToIracing()
         SetForegroundWindow( hwnd );
 }
 
-// Cargar una imagen .png utilizando WIC
-void LoadPNGImage(const wchar_t* filePath, ComPtr<IWICImagingFactory>& wicFactory, ComPtr<IWICBitmapDecoder>& decoder, ComPtr<IWICBitmapFrameDecode>& frame, ComPtr<IWICFormatConverter>& formatConverter) {
-
-    // Carga el archivo PNG utilizando el decodificador de mapas de bits WIC
-    wicFactory->CreateDecoderFromFilename(filePath, nullptr, GENERIC_READ, WICDecodeMetadataCacheOnDemand, decoder.GetAddressOf());
-
-    // Obtiene el primer fotograma del archivo PNG
-    decoder->GetFrame(0, frame.GetAddressOf());
-
-    // Convierte el formato del fotograma a 32 bpp ARGB
-    wicFactory->CreateFormatConverter(formatConverter.GetAddressOf());
-    formatConverter->Initialize(frame.Get(), GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone, nullptr, 0.0f, WICBitmapPaletteTypeCustom);
-
-    /*if (FAILED(hr))
-    {
-        // Error al crear el decodificador
-        return hr;
-    }*/
-
-}
-
-static void LoadCarIcons(map<string, IWICFormatConverter*>& mapa) {
-    const wchar_t* directory = L"./carIcons";
-
-    CoInitialize(nullptr);
-
-    ComPtr<IWICImagingFactory> wicFactory;
-    ComPtr<IWICBitmapDecoder> decoder;
-    ComPtr<IWICBitmapFrameDecode> frame;
-    ComPtr<IWICFormatConverter> formatConverter;
-
-    CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(wicFactory.GetAddressOf()));
-
-    if (filesystem::exists(directory) && filesystem::is_directory(directory)) {
-        for (const auto& archivo : filesystem::directory_iterator(directory)) {
-            if (filesystem::is_regular_file(archivo)) {
-                std::string ruta = archivo.path().string();
-
-                int length = MultiByteToWideChar(CP_UTF8, 0, ruta.c_str(), -1, NULL, 0);
-                wchar_t* ruta_wchar = new wchar_t[length];
-                MultiByteToWideChar(CP_UTF8, 0, ruta.c_str(), -1, ruta_wchar, length);
-
-                LoadPNGImage(ruta_wchar, wicFactory, decoder, frame, formatConverter);
-                string name = archivo.path().filename().string();
-                std::regex pattern("\\.\\w+$");
-                mapa[regex_replace(name, pattern, "")] = formatConverter.Get();
-            }
-        }
-    }
-    else {
-        cout << "Cars icons doesnt found" << endl;
-    }
-}
-
 int main()
 {
     // Bump priority up so we get time from the sim
@@ -176,9 +115,6 @@ int main()
     // Load the config and watch it for changes
     g_cfg.load();
     g_cfg.watchForChanges();
-
-    map<string, IWICFormatConverter*> mapa;
-    LoadCarIcons(mapa);
 
     // Register global hotkeys
     registerHotkeys();
@@ -202,11 +138,11 @@ int main()
     printf("====================================================================================\n\n");
 
     // Create overlays
-    vector<Overlay*> overlays;
+    std::vector<Overlay*> overlays;
     overlays.push_back( new OverlayCover() );
     overlays.push_back( new OverlayRelative() );
     overlays.push_back( new OverlayInputs() );
-    overlays.push_back( new OverlayStandings( mapa ) );
+    overlays.push_back( new OverlayStandings() );
     overlays.push_back( new OverlayDDU() );
 #ifdef _DEBUG
     overlays.push_back( new OverlayDebug() );
@@ -325,7 +261,4 @@ int main()
 
     for( Overlay* o : overlays )
         delete o;
-
-    // Libera los recursos de COM
-    CoUninitialize();
 }
